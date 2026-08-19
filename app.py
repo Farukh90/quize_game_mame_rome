@@ -1,9 +1,14 @@
+import base64
 import os
 import time
-import base64
+import sys
+import asyncio
+import database as db
 import streamlit as st
 import streamlit.components.v1 as components
-import database as db
+
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # Инициализация базы данных
 db.init_db()
@@ -30,10 +35,13 @@ def get_font_face_css():
     """
 
 
-st.set_page_config(page_title="SimpleGame", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="SimpleGame", layout="wide", initial_sidebar_state="expanded"
+)
 
 font_css = get_font_face_css()
-st.markdown(f"""
+st.markdown(
+    f"""
     <style>
     {font_css}
 
@@ -47,7 +55,7 @@ st.markdown(f"""
         visibility: hidden !important;
     }}
 
-    /* Скрываем подпись клавиатурного сокращения (Keyboard_double), сохраняя саму кнопку свертывания */
+    /* Скрываем подпись клавиатурного сокращения */
     [data-testid="stSidebarCollapseButton"] button span,
     [data-testid="stSidebarCollapseButton"] button p,
     button[data-testid="baseButton-headerNoPadding"] span,
@@ -66,9 +74,16 @@ st.markdown(f"""
         font-family: 'SimpleproDisplay', sans-serif !important;
     }}
 
+    /* Выравнивание элементов внутри горизонтальных блоков Streamlit по центру */
     [data-testid="stHorizontalBlock"] {{
         gap: 0.5rem !important;
-        align-items: center;
+        align-items: center !important;
+    }}
+
+    [data-testid="column"] {{
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
     }}
 
     [data-testid="stExpander"] {{
@@ -83,7 +98,7 @@ st.markdown(f"""
         padding-left: 10px !important;
     }}
 
-    /* Выравнивание категории и кнопок по высоте и убирание внешних отступов */
+    /* Выравнивание категории и кнопок по высоте и геометрии */
     .category-card {{
         background-color: #ff1428;
         color: #ffffff;
@@ -98,6 +113,8 @@ st.markdown(f"""
         text-align: center;
         padding: 0 10px;
         margin: 0 !important;
+        box-sizing: border-box;
+        line-height: 1.1;
     }}
 
     /* Корректировка контейнеров markdown для идеального выравнивания сетки */
@@ -105,8 +122,13 @@ st.markdown(f"""
         margin: 0 !important;
     }}
 
+    .stElementContainer {{
+        margin-bottom: 0px !important;
+    }}
+
     .stButton {{
         margin: 0 !important;
+        width: 100% !important;
     }}
 
     .stButton>button {{
@@ -121,6 +143,10 @@ st.markdown(f"""
         box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         transition: all 0.15s ease-in-out;
         margin: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-sizing: border-box;
     }}
 
     .stButton>button:hover {{
@@ -131,6 +157,25 @@ st.markdown(f"""
 
     .stButton>button:disabled {{
         visibility: hidden !important;
+    }}
+    
+    /* Добавьте в конец основного блока <style> */
+    .question-text, 
+    .q-text {{
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
+    }}
+    
+    /* Стили для неактивных кнопок-категорий (чтобы они выглядели как карточки) */
+    .stButton>button[kind="primary"]:disabled {{
+        visibility: visible !important;
+        background-color: #ff1428 !important;
+        color: #ffffff !important;
+        border: 2px solid #ff1428 !important;
+        opacity: 1 !important;
+        cursor: default !important;
+        font-size: 20px !important;
+        line-height: 1.1 !important;
+        padding: 0 10px !important;
     }}
 
     div.stButton > button[key="btn_stop_timer"] {{
@@ -176,7 +221,9 @@ st.markdown(f"""
     .winner-name {{ font-size: 40px; color: #fff200; font-weight: bold; margin-bottom: 15px; }}
     .winner-score {{ font-size: 30px; }}
     </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # ---------------------------------------------------------
 # 2. Инициализация состояния из БД
@@ -208,7 +255,9 @@ if "blitz_finished" not in st.session_state:
 
 st.session_state.timer_default = int(db.get_setting("timer_default", "30"))
 st.session_state.timer_blitz = int(db.get_setting("timer_blitz", "15"))
-st.session_state.timer_blitz_final = int(db.get_setting("timer_blitz_final", "30"))
+st.session_state.timer_blitz_final = int(
+    db.get_setting("timer_blitz_final", "30")
+)
 
 
 def render_header(title_text):
@@ -221,12 +270,14 @@ def render_header(title_text):
 if not st.session_state.game_started:
     render_header("⚙️ Настройка «Своей Игры»")
 
-    tab_players, tab_quiz, tab_blitz_setting, tab_settings = st.tabs([
-        "👥 Игроки",
-        "📚 Вопросы табло",
-        "⚡ Блиц-вопросы участников",
-        "⏱️ Таймеры"
-    ])
+    tab_players, tab_quiz, tab_blitz_setting, tab_settings = st.tabs(
+        [
+            "👥 Игроки",
+            "📚 Вопросы табло",
+            "⚡ Блиц-вопросы участников",
+            "⏱️ Таймеры",
+        ]
+    )
 
     with tab_players:
         st.subheader("Список участников")
@@ -243,8 +294,10 @@ if not st.session_state.game_started:
 
         st.divider()
         col_input, col_add = st.columns([3, 1])
-        new_name = col_input.text_input("Имя нового участника:", key="new_player_input")
-        if col_add.button("➕ Добавить игрока", use_container_width=True):
+        new_name = col_input.text_input(
+            "Имя нового участника:", key="new_player_input"
+        )
+        if col_add.button("➕ Добавить игрока", use_container_width="stretch"):
             if new_name:
                 db.add_player(new_name)
                 st.rerun()
@@ -254,12 +307,19 @@ if not st.session_state.game_started:
 
         col_cat_in, col_cat_add = st.columns([3, 1])
         new_cat = col_cat_in.text_input("Название новой темы:")
-        if col_cat_add.button("➕ Добавить тему", use_container_width=True):
+        if col_cat_add.button("➕ Добавить тему", use_container_width="stretch"):
             if new_cat:
                 db.add_category(new_cat)
                 st.rerun()
 
         st.divider()
+
+        TYPE_MAP = {
+            "text": "1. Текст",
+            "choice": "2. Текст (4 варианта ответа)",
+            "image": "3. Картинка + Текст",
+        }
+        REVERSE_TYPE_MAP = {v: k for k, v in TYPE_MAP.items()}
 
         for cat_name in list(st.session_state.quiz_data.keys()):
             with st.expander(f"📁 Тема: {cat_name}", expanded=False):
@@ -269,19 +329,120 @@ if not st.session_state.game_started:
 
                 scores = [100, 200, 300, 400, 500]
                 for sc in scores:
-                    st.markdown(f"**Вопрос на {sc} баллов**")
+                    st.markdown(f"--- \n#### Вопрос на {sc} баллов")
                     q_item = st.session_state.quiz_data[cat_name].get(sc, {})
                     curr_q = q_item.get("q", "")
                     curr_a = q_item.get("a", "")
+                    curr_type = q_item.get("q_type", "text")
+                    curr_opts = q_item.get("options", ["", "", "", ""])
+                    curr_img = q_item.get("image_path", "")
                     curr_blitz = q_item.get("is_blitz", False)
 
-                    c1, c2, c3 = st.columns([3, 3, 1])
-                    q_val = c1.text_input(f"Вопрос ({sc})", value=curr_q, key=f"q_{cat_name}_{sc}")
-                    a_val = c2.text_input(f"Ответ ({sc})", value=curr_a, key=f"a_{cat_name}_{sc}")
-                    blitz_val = c3.checkbox("⚡ БЛИЦ", value=curr_blitz, key=f"blitz_{cat_name}_{sc}")
+                    c_type, c_blitz = st.columns([3, 1])
+                    selected_type_label = c_type.selectbox(
+                        f"Тип вопроса ({sc})",
+                        options=list(TYPE_MAP.values()),
+                        index=list(TYPE_MAP.keys()).index(curr_type),
+                        key=f"type_{cat_name}_{sc}",
+                    )
+                    selected_type = REVERSE_TYPE_MAP[selected_type_label]
+                    blitz_val = c_blitz.checkbox(
+                        "⚡ БЛИЦ", value=curr_blitz, key=f"blitz_{cat_name}_{sc}"
+                    )
 
-                    if q_val and (q_val != curr_q or a_val != curr_a or blitz_val != curr_blitz):
-                        db.save_question(cat_name, sc, q_val, a_val, blitz_val)
+                    q_val = st.text_input(
+                        f"Текст вопроса ({sc})",
+                        value=curr_q,
+                        key=f"q_{cat_name}_{sc}",
+                    )
+
+                    opts_val = ["", "", "", ""]
+                    img_path_val = curr_img
+
+                    if selected_type == "choice":
+                        st.caption(
+                            "Введите 4 варианта ответа и укажите верный:"
+                        )
+                        c_a, c_b = st.columns(2)
+                        c_c, c_d = st.columns(2)
+                        opts_val[0] = c_a.text_input(
+                            "Вариант A",
+                            value=curr_opts[0] if len(curr_opts) > 0 else "",
+                            key=f"opt_a_{cat_name}_{sc}",
+                        )
+                        opts_val[1] = c_b.text_input(
+                            "Вариант B",
+                            value=curr_opts[1] if len(curr_opts) > 1 else "",
+                            key=f"opt_b_{cat_name}_{sc}",
+                        )
+                        opts_val[2] = c_c.text_input(
+                            "Вариант C",
+                            value=curr_opts[2] if len(curr_opts) > 2 else "",
+                            key=f"opt_c_{cat_name}_{sc}",
+                        )
+                        opts_val[3] = c_d.text_input(
+                            "Вариант D",
+                            value=curr_opts[3] if len(curr_opts) > 3 else "",
+                            key=f"opt_d_{cat_name}_{sc}",
+                        )
+
+                        a_val = st.text_input(
+                            f"Правильный ответ (A, B, C или D или текст) ({sc})",
+                            value=curr_a,
+                            key=f"a_{cat_name}_{sc}",
+                        )
+
+                    elif selected_type == "image":
+                        uploaded_file = st.file_uploader(
+                            "Прикрепить картинку (PNG, JPEG)",
+                            type=["png", "jpg", "jpeg"],
+                            key=f"img_up_{cat_name}_{sc}",
+                        )
+                        if uploaded_file is not None:
+                            os.makedirs("uploads", exist_ok=True)
+                            file_path = os.path.join(
+                                "uploads",
+                                f"{cat_name}_{sc}_{uploaded_file.name}",
+                            )
+                            with open(file_path, "wb") as f:
+                                f.write(uploaded_file.getbuffer())
+                            img_path_val = file_path
+
+                        if img_path_val:
+                            st.image(
+                                img_path_val,
+                                width=200,
+                                caption="Загруженное изображение",
+                            )
+
+                        a_val = st.text_input(
+                            f"Ответ на вопрос ({sc})",
+                            value=curr_a,
+                            key=f"a_{cat_name}_{sc}",
+                        )
+
+                    else:
+                        a_val = st.text_input(
+                            f"Ответ на вопрос ({sc})",
+                            value=curr_a,
+                            key=f"a_{cat_name}_{sc}",
+                        )
+
+                    if st.button(
+                        f"💾 Сохранить вопрос {sc}", key=f"save_{cat_name}_{sc}"
+                    ):
+                        db.save_question(
+                            cat_name,
+                            sc,
+                            q_val,
+                            a_val,
+                            selected_type,
+                            opts_val,
+                            img_path_val,
+                            blitz_val,
+                        )
+                        st.success("Сохранено!")
+                        st.rerun()
 
     with tab_blitz_setting:
         st.subheader("Индивидуальные вопросы Блиц-финала")
@@ -299,38 +460,70 @@ if not st.session_state.game_started:
                     for row in blitz_qs:
                         q_id = row["id"]
                         c_pts, c_q, c_a, c_del = st.columns([1, 4, 4, 1])
-                        pts_val = c_pts.number_input("Баллы", value=row["points"], key=f"bq_pts_{q_id}")
-                        q_val = c_q.text_input("Вопрос", value=row["question"], key=f"bq_q_{q_id}")
-                        a_val = c_a.text_input("Ответ", value=row["answer"], key=f"bq_a_{q_id}")
+                        pts_val = c_pts.number_input(
+                            "Баллы", value=row["points"], key=f"bq_pts_{q_id}"
+                        )
+                        q_val = c_q.text_input(
+                            "Вопрос",
+                            value=row["question"],
+                            key=f"bq_q_{q_id}",
+                        )
+                        a_val = c_a.text_input(
+                            "Ответ", value=row["answer"], key=f"bq_a_{q_id}"
+                        )
 
                         if c_del.button("❌", key=f"del_bq_{q_id}"):
                             db.delete_blitz_final_question(q_id)
                             st.rerun()
 
-                        if (pts_val != row["points"] or q_val != row["question"] or a_val != row["answer"]):
-                            db.update_blitz_final_question(q_id, pts_val, q_val, a_val)
+                        if (
+                            pts_val != row["points"]
+                            or q_val != row["question"]
+                            or a_val != row["answer"]
+                        ):
+                            db.update_blitz_final_question(
+                                q_id, pts_val, q_val, a_val
+                            )
 
                     st.markdown(f"**➕ Добавить вопрос для {p_name}**")
                     cb_pts, cb_q, cb_a, cb_btn = st.columns([1, 4, 4, 1])
-                    new_bq_pts = cb_pts.number_input("Баллы", value=100, key=f"new_bq_pts_{p_name}")
-                    new_bq_q = cb_q.text_input("Вопрос", key=f"new_bq_q_{p_name}")
+                    new_bq_pts = cb_pts.number_input(
+                        "Баллы", value=100, key=f"new_bq_pts_{p_name}"
+                    )
+                    new_bq_q = cb_q.text_input(
+                        "Вопрос", key=f"new_bq_q_{p_name}"
+                    )
                     new_bq_a = cb_a.text_input("Ответ", key=f"new_bq_a_{p_name}")
 
                     if cb_btn.button("➕", key=f"add_bq_btn_{p_name}"):
                         if new_bq_q and new_bq_a:
-                            db.add_blitz_final_question(p_name, new_bq_pts, new_bq_q, new_bq_a)
+                            db.add_blitz_final_question(
+                                p_name, new_bq_pts, new_bq_q, new_bq_a
+                            )
                             st.rerun()
 
     with tab_settings:
         st.subheader("Настройки таймеров обратного отсчета")
 
         c_t1, c_t2, c_t3 = st.columns(3)
-        new_t_def = c_t1.number_input("⏱️ Обычный вопрос (сек):", min_value=5, max_value=120,
-                                      value=st.session_state.timer_default)
-        new_t_blitz = c_t2.number_input("⚡ БЛИЦ в табло (сек):", min_value=3, max_value=60,
-                                        value=st.session_state.timer_blitz)
-        new_t_blitz_f = c_t3.number_input("⚡ Блиц-финал на игрока (сек):", min_value=5, max_value=300,
-                                          value=st.session_state.timer_blitz_final)
+        new_t_def = c_t1.number_input(
+            "⏱️ Обычный вопрос (сек):",
+            min_value=5,
+            max_value=120,
+            value=st.session_state.timer_default,
+        )
+        new_t_blitz = c_t2.number_input(
+            "⚡ БЛИЦ в табло (сек):",
+            min_value=3,
+            max_value=60,
+            value=st.session_state.timer_blitz,
+        )
+        new_t_blitz_f = c_t3.number_input(
+            "⚡ Блиц-финал на игрока (сек):",
+            min_value=5,
+            max_value=300,
+            value=st.session_state.timer_blitz_final,
+        )
 
         if new_t_def != st.session_state.timer_default:
             db.set_setting("timer_default", new_t_def)
@@ -340,7 +533,7 @@ if not st.session_state.game_started:
             db.set_setting("timer_blitz_final", new_t_blitz_f)
 
     st.divider()
-    if st.button("🚀 ЗАПУСТИТЬ ИГРУ", type="primary", use_container_width=True):
+    if st.button("🚀 ЗАПУСТИТЬ ИГРУ", type="primary", use_container_width="stretch"):
         if not st.session_state.quiz_data:
             st.error("Добавьте хотя бы одну тему!")
         else:
@@ -353,40 +546,45 @@ if not st.session_state.game_started:
 else:
     with st.sidebar:
         if os.path.exists("logo.png"):
-            st.image("logo.png", use_container_width=True)
+            st.image("logo.png", use_container_width="stretch")
 
         st.header("🙎 Игроки")
         for player, score in st.session_state.players.items():
-            st.markdown(f"""
+            st.markdown(
+                f"""
                 <div class="player-card">
                     <div style="font-size: 14px; color: #d0d7de;">{player}</div>
                     <div class="player-score">{score} б.</div>
                 </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
         st.divider()
 
         if st.session_state.mode == "main":
-            if st.button("⚡ Запустить Блиц-финал", use_container_width=True):
+            if st.button("⚡ Запустить Блиц-финал", use_container_width="stretch"):
                 st.session_state.mode = "blitz_final"
                 st.session_state.blitz_p_index = 0
                 st.session_state.blitz_q_index = 0
-                st.session_state.blitz_started = False  # <-- Добавлено здесь
-                st.session_state.blitz_scores = {p: 0 for p in st.session_state.players}
+                st.session_state.blitz_started = False
+                st.session_state.blitz_scores = {
+                    p: 0 for p in st.session_state.players
+                }
                 st.session_state.blitz_finished = False
                 if "blitz_start_time" in st.session_state:
                     del st.session_state.blitz_start_time
                 st.rerun()
         else:
-            if st.button("⬅ Вернуться к Табло", use_container_width=True):
+            if st.button("⬅ Вернуться к Табло", use_container_width="stretch"):
                 st.session_state.mode = "main"
                 st.rerun()
 
-        if st.button("⚙️ Настройки игры", use_container_width=True):
+        if st.button("⚙️ Настройки игры", use_container_width="stretch"):
             st.session_state.game_started = False
             st.rerun()
 
-        if st.button("🔄 Сбросить счет и вопросы", use_container_width=True):
+        if st.button("🔄 Сбросить счет и вопросы", use_container_width="stretch"):
             st.session_state.current_question = None
             st.session_state.timer_stopped = False
             st.session_state.mode = "main"
@@ -403,7 +601,10 @@ else:
 
         players_list = list(st.session_state.players.keys())
 
-        if st.session_state.blitz_finished or st.session_state.blitz_p_index >= len(players_list):
+        if (
+            st.session_state.blitz_finished
+            or st.session_state.blitz_p_index >= len(players_list)
+        ):
             st.session_state.blitz_finished = True
             st.balloons()
 
@@ -416,41 +617,55 @@ else:
             winner = max(total_scores, key=total_scores.get)
             winner_score = total_scores[winner]
 
-            st.markdown(f"""
+            st.markdown(
+                f"""
                 <div class="winner-box">
                     <div class="winner-title">🏆 ПОБЕДИТЕЛЬ ИГРЫ 🏆</div>
                     <div class="winner-name">{winner}</div>
                     <div class="winner-score">Суммарный результат: <b>{winner_score} баллов</b></div>
                 </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
             st.subheader("📊 Итоговая таблица результатов:")
             for p in players_list:
                 m_sc = st.session_state.players.get(p, 0)
                 b_sc = st.session_state.blitz_scores.get(p, 0)
                 tot = m_sc + b_sc
-                st.write(f"• **{p}**: Табло ({m_sc}) + Блиц ({b_sc}) = **{tot} баллов**")
+                st.write(
+                    f"• **{p}**: Табло ({m_sc}) + Блиц ({b_sc}) = **{tot} баллов**"
+                )
 
         else:
             current_player = players_list[st.session_state.blitz_p_index]
-            blitz_questions = db.load_blitz_final_questions_for_player(current_player)
+            blitz_questions = db.load_blitz_final_questions_for_player(
+                current_player
+            )
 
             st.subheader(f"Ход игрока: 🙎 **{current_player}**")
-            st.markdown(f"Набрано очков в блице: **{st.session_state.blitz_scores.get(current_player, 0)}**")
+            st.markdown(
+                f"Набрано очков в блице: **{st.session_state.blitz_scores.get(current_player, 0)}**"
+            )
 
             # Проверяем, нажал ли игрок кнопку старта хода
             if not st.session_state.get("blitz_started", False):
                 st.info(
-                    f"Игрок **{current_player}**, приготовьтесь! Нажмите кнопку ниже, чтобы запустить таймер и открыть первый вопрос.")
-                if st.button("🚀 ПОЕХАЛИ!", type="primary", use_container_width=True):
+                    f"Игрок **{current_player}**, приготовьтесь! Нажмите кнопку ниже, чтобы запустить таймер и открыть первый вопрос."
+                )
+                if st.button(
+                    "🚀 ПОЕХАЛИ!", type="primary", use_container_width="stretch"
+                ):
                     st.session_state.blitz_started = True
                     st.session_state.blitz_start_time = time.time()
                     st.session_state.blitz_current_p = current_player
                     st.rerun()
 
             elif not blitz_questions:
-                st.warning(f"Для участника {current_player} нет вопросов в Блиц-финале! Добавьте их в настройках.")
-                if st.button("▶ Пропустить игрока", use_container_width=True):
+                st.warning(
+                    f"Для участника {current_player} нет вопросов в Блиц-финале! Добавьте их в настройках."
+                )
+                if st.button("▶ Пропустить игрока", use_container_width="stretch"):
                     st.session_state.blitz_p_index += 1
                     st.session_state.blitz_q_index = 0
                     st.session_state.blitz_started = False
@@ -462,7 +677,10 @@ else:
                 q_idx = st.session_state.blitz_q_index
                 time_limit = st.session_state.timer_blitz_final
 
-                elapsed = int(time.time() - st.session_state.get("blitz_start_time", time.time()))
+                elapsed = int(
+                    time.time()
+                    - st.session_state.get("blitz_start_time", time.time())
+                )
                 time_left = max(0, time_limit - elapsed)
 
                 if time_left == 0 or q_idx >= len(blitz_questions):
@@ -471,7 +689,11 @@ else:
                     else:
                         st.success("🎉 Игрок ответил на все свои вопросы!")
 
-                    if st.button("▶ Перейти к следующему игроку", type="primary", use_container_width=True):
+                    if st.button(
+                        "▶ Перейти к следующему игроку",
+                        type="primary",
+                        use_container_width="stretch",
+                    ):
                         st.session_state.blitz_p_index += 1
                         st.session_state.blitz_q_index = 0
                         st.session_state.blitz_started = False
@@ -511,7 +733,11 @@ else:
                         .flip-card-inner.state-answer {{ transform: rotateY(180deg) !important; }}
 
                         .q-num {{ font-size: 13px; color: #ff1428; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }}
-                        .q-text {{ font-size: 24px; font-weight: 600; line-height: 1.2; }}
+                        .q-text {{ 
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important; 
+                            font-size: 24px; 
+                            font-weight: 600; line-height: 1.2; 
+                        }}
                         .a-text {{ font-size: 28px; font-weight: 800; }}
 
                         .show-btn {{
@@ -561,16 +787,30 @@ else:
                     components.html(blitz_card_html, height=310)
 
                     col1, col2, col3 = st.columns(3)
-                    if col1.button("✅ Верно", key=f"blitz_win_{q_idx}", use_container_width=True):
-                        st.session_state.blitz_scores[current_player] += current_q['points']
+                    if col1.button(
+                        "✅ Верно",
+                        key=f"blitz_win_{q_idx}",
+                        use_container_width="stretch",
+                    ):
+                        st.session_state.blitz_scores[current_player] += (
+                            current_q["points"]
+                        )
                         st.session_state.blitz_q_index += 1
                         st.rerun()
 
-                    if col2.button("❌ Мимо / Пропуск", key=f"blitz_lose_{q_idx}", use_container_width=True):
+                    if col2.button(
+                        "❌ Мимо / Пропуск",
+                        key=f"blitz_lose_{q_idx}",
+                        use_container_width="stretch",
+                    ):
                         st.session_state.blitz_q_index += 1
                         st.rerun()
 
-                    if col3.button("⏹ Досрочно завершить", key=f"blitz_stop_{q_idx}", use_container_width=True):
+                    if col3.button(
+                        "⏹ Досрочно завершить",
+                        key=f"blitz_stop_{q_idx}",
+                        use_container_width="stretch",
+                    ):
                         st.session_state.blitz_q_index = len(blitz_questions)
                         st.rerun()
 
@@ -586,98 +826,141 @@ else:
             data = st.session_state.quiz_data[cat][points]
 
             is_blitz = data.get("is_blitz", False)
-            time_limit = st.session_state.timer_blitz if is_blitz else st.session_state.timer_default
-            badge_title = "⚡ БЛИЦ-ВОПРОС" if is_blitz else f"{cat} — {points} баллов"
+            time_limit = (
+                st.session_state.timer_blitz
+                if is_blitz
+                else st.session_state.timer_default
+            )
+            badge_title = (
+                "⚡ БЛИЦ-ВОПРОС" if is_blitz else f"{cat} — {points} баллов"
+            )
 
-            is_already_stopped_js = "true" if st.session_state.timer_stopped else "false"
+            q_type = data.get("q_type", "text")
+            options = data.get("options", ["", "", "", ""])
+            image_path = data.get("image_path", "")
+
+            # Формирование HTML изображения в карточке
+            img_html = ""
+            if q_type == "image" and image_path and os.path.exists(image_path):
+                with open(image_path, "rb") as img_f:
+                    b64_img = base64.b64encode(img_f.read()).decode("utf-8")
+                img_html = f'<img src="data:image/jpeg;base64,{b64_img}" style="max-height: 140px; border-radius: 8px; margin: 8px 0;" />'
+
+            # Формирование HTML вариантов ответов
+            opts_html = ""
+            if q_type == "choice" and options:
+                labels = ["A", "B", "C", "D"]
+                opts_items = "".join(
+                    [
+                        f'<div style="background: rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 6px; font-weight: bold;"><b>{labels[i]}:</b> {options[i]}</div>'
+                        for i in range(min(4, len(options)))
+                        if options[i]
+                    ]
+                )
+                opts_html = f'<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; margin-top: 10px;">{opts_items}</div>'
+
+            is_already_stopped_js = (
+                "true" if st.session_state.timer_stopped else "false"
+            )
 
             flip_card_html = f"""
-            <style>
-                {font_css}
-                * {{ font-family: 'SimpleproDisplay', 'Segoe UI', sans-serif !important; }}
-                .flip-card {{ background-color: transparent; width: 100%; height: 280px; perspective: 1000px; }}
-                .flip-card-inner {{
-                    position: relative; width: 100%; height: 100%; text-align: center;
-                    transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-                    transform-style: preserve-3d; transform: rotateY(0deg);
-                }}
-                .card-face {{
-                    position: absolute; width: 100%; height: 100%;
-                    -webkit-backface-visibility: hidden; backface-visibility: hidden;
-                    border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.4);
-                    display: flex; flex-direction: column; justify-content: center;
-                    align-items: center; padding: 20px; box-sizing: border-box;
-                }}
-                .face-question {{ background-color: #454b4d; color: #ffffff; border: 4px solid #ff1428; transform: rotateY(0deg); }}
-                .face-answer {{ background-color: rgb(46, 134, 86); color: #ffffff; border: 4px solid #1f5c3b; transform: rotateY(180deg); }}
-                .flip-card-inner.state-answer {{ transform: rotateY(180deg) !important; }}
-                .question-text {{ font-size: 24px; font-weight: 600; margin-bottom: 15px; }}
-                .answer-text {{ font-size: 32px; font-weight: 800; color: #ffffff; margin-top: 10px; }}
-                .timer-badge {{
-                    font-size: 18px; font-weight: bold; color: #ffffff; background: #ff1428;
-                    padding: 6px 20px; border-radius: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-                }}
-                .show-answer-btn {{
-                    margin-top: 15px; background-color: #ff1428; color: #ffffff; border: none;
-                    padding: 10px 24px; font-size: 18px; font-weight: bold; border-radius: 8px;
-                    cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.15s, background-color 0.15s;
-                }}
-                .show-answer-btn:hover {{ background-color: #d80f20; transform: scale(1.05); }}
-            </style>
+                    <style>
+                        {font_css}
+                        * {{ font-family: 'SimpleproDisplay', 'Segoe UI', sans-serif !important; }}
+                        .flip-card {{ background-color: transparent; width: 100%; height: 380px; perspective: 1000px; }}
+                        .flip-card-inner {{
+                            position: relative; width: 100%; height: 100%; text-align: center;
+                            transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                            transform-style: preserve-3d; transform: rotateY(0deg);
+                        }}
+                        .card-face {{
+                            position: absolute; width: 100%; height: 100%;
+                            -webkit-backface-visibility: hidden; backface-visibility: hidden;
+                            border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+                            display: flex; flex-direction: column; justify-content: center;
+                            align-items: center; padding: 20px; box-sizing: border-box;
+                        }}
+                        .face-question {{ background-color: #454b4d; color: #ffffff; border: 4px solid #ff1428; transform: rotateY(0deg); }}
+                        .face-answer {{ background-color: rgb(46, 134, 86); color: #ffffff; border: 4px solid #1f5c3b; transform: rotateY(180deg); }}
+                        .flip-card-inner.state-answer {{ transform: rotateY(180deg) !important; }}
+                        .question-text {{ 
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
+                            font-size: 22px; 
+                            font-weight: 600; 
+                            margin-bottom: 5px; 
+                        }}
+                        .answer-text {{ font-size: 32px; font-weight: 800; color: #ffffff; margin-top: 10px; }}
+                        .timer-badge {{
+                            font-size: 16px; font-weight: bold; color: #ffffff; background: #ff1428;
+                            padding: 4px 16px; border-radius: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); margin-top: 8px;
+                        }}
+                        .show-answer-btn {{
+                            margin-top: 10px; background-color: #ff1428; color: #ffffff; border: none;
+                            padding: 8px 20px; font-size: 16px; font-weight: bold; border-radius: 8px;
+                            cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.15s, background-color 0.15s;
+                        }}
+                        .show-answer-btn:hover {{ background-color: #d80f20; transform: scale(1.05); }}
+                    </style>
 
-            <div class="flip-card">
-                <div class="flip-card-inner" id="cardInner">
-                    <div class="card-face face-question">
-                        <div style="font-size: 16px; color: #ff1428; font-weight: bold; text-transform: uppercase; margin-bottom: 5px;">{badge_title}</div>
-                        <div class="question-text">{data['q']}</div>
-                        <div class="timer-badge" id="timer">⏱️ Осталось: {time_limit} сек</div>
-                        <button class="show-answer-btn" id="showAnswerBtn" style="display: none;" onclick="showAnswer()">👁 Показать ответ</button>
+                    <div class="flip-card">
+                        <div class="flip-card-inner" id="cardInner">
+                            <div class="card-face face-question">
+                                <div style="font-size: 14px; color: #ff1428; font-weight: bold; text-transform: uppercase;">{badge_title}</div>
+                                <div class="question-text">{data['q']}</div>
+                                {img_html}
+                                {opts_html}
+                                <div class="timer-badge" id="timer">⏱️ Осталось: {time_limit} сек</div>
+                                <button class="show-answer-btn" id="showAnswerBtn" style="display: none;" onclick="showAnswer()">👁 Показать ответ</button>
+                            </div>
+                            <div class="card-face face-answer">
+                                <div style="font-size: 16px; color: #d4edda; font-weight: bold; text-transform: uppercase;">Правильный ответ:</div>
+                                <div class="answer-text">✅ {data['a']}</div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-face face-answer">
-                        <div style="font-size: 16px; color: #d4edda; font-weight: bold; text-transform: uppercase;">Правильный ответ:</div>
-                        <div class="answer-text">✅ {data['a']}</div>
-                    </div>
-                </div>
-            </div>
 
-            <script>
-                const cardInner = document.getElementById('cardInner');
-                const timerEl = document.getElementById('timer');
-                const showBtn = document.getElementById('showAnswerBtn');
+                    <script>
+                        const cardInner = document.getElementById('cardInner');
+                        const timerEl = document.getElementById('timer');
+                        const showBtn = document.getElementById('showAnswerBtn');
 
-                let timeLeft = {time_limit};
-                let isStopped = {is_already_stopped_js};
+                        let timeLeft = {time_limit};
+                        let isStopped = {is_already_stopped_js};
 
-                function stopTimerAndShowBtn() {{
-                    if (typeof interval !== 'undefined') clearInterval(interval);
-                    timerEl.style.display = 'none';
-                    showBtn.style.display = 'inline-block';
-                }}
+                        function stopTimerAndShowBtn() {{
+                            if (typeof interval !== 'undefined') clearInterval(interval);
+                            timerEl.style.display = 'none';
+                            showBtn.style.display = 'inline-block';
+                        }}
 
-                if (isStopped) {{
-                    stopTimerAndShowBtn();
-                }} else {{
-                    var interval = setInterval(() => {{
-                        timeLeft--;
-                        if (timeLeft <= 0) {{
+                        if (isStopped) {{
                             stopTimerAndShowBtn();
                         }} else {{
-                            timerEl.innerText = "⏱️ Осталось: " + timeLeft + " сек";
+                            var interval = setInterval(() => {{
+                                timeLeft--;
+                                if (timeLeft <= 0) {{
+                                    stopTimerAndShowBtn();
+                                }} else {{
+                                    timerEl.innerText = "⏱️ Осталось: " + timeLeft + " сек";
+                                }}
+                            }}, 1000);
                         }}
-                    }}, 1000);
-                }}
 
-                function showAnswer() {{
-                    stopTimerAndShowBtn();
-                    cardInner.classList.add('state-answer');
-                }}
-            </script>
-            """
+                        function showAnswer() {{
+                            stopTimerAndShowBtn();
+                            cardInner.classList.add('state-answer');
+                        }}
+                    </script>
+                    """
 
-            components.html(flip_card_html, height=290)
+            components.html(flip_card_html, height=390)
 
             if not st.session_state.timer_stopped:
-                if st.button("⏱️ Завершить таймер досрочно", key="btn_stop_timer", use_container_width=True):
+                if st.button(
+                    "⏱️ Завершить таймер досрочно",
+                    key="btn_stop_timer",
+                    use_container_width="stretch",
+                ):
                     st.session_state.timer_stopped = True
                     st.rerun()
 
@@ -712,10 +995,16 @@ else:
             scores = [100, 200, 300, 400, 500]
 
             for cat_name, cat_questions in st.session_state.quiz_data.items():
-                cols = st.columns([1.8, 1, 1, 1, 1, 1], gap="small")
+                cols = st.columns([1.8, 1, 1, 1, 1, 1])
 
                 with cols[0]:
-                    st.markdown(f'<div class="category-card">{cat_name}</div>', unsafe_allow_html=True)
+                    st.button(
+                        label=cat_name,
+                        key=f"cat_btn_{cat_name}",
+                        type="primary",
+                        disabled=True,
+                        use_container_width="stretch",
+                    )
 
                 for idx, score in enumerate(scores):
                     with cols[idx + 1]:
@@ -728,11 +1017,14 @@ else:
 
                         if has_question:
                             if st.button(
-                                    btn_label,
-                                    key=f"btn_{cat_name}_{score}",
-                                    disabled=is_answered,
-                                    use_container_width=True
+                                btn_label,
+                                key=f"btn_{cat_name}_{score}",
+                                disabled=is_answered,
+                                use_container_width="stretch",
                             ):
-                                st.session_state.current_question = {"cat": cat_name, "points": score}
+                                st.session_state.current_question = {
+                                    "cat": cat_name,
+                                    "points": score,
+                                }
                                 st.session_state.timer_stopped = False
                                 st.rerun()

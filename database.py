@@ -1,4 +1,5 @@
 import sqlite3
+import json
 
 DB_NAME = "quiz_game.db"
 
@@ -15,7 +16,6 @@ def init_db():
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        # Таблица категорий/тем
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS categories (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,7 +23,6 @@ def init_db():
             )
         """)
 
-        # Таблица вопросов
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS questions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,6 +30,9 @@ def init_db():
                 points INTEGER NOT NULL,
                 question TEXT NOT NULL,
                 answer TEXT NOT NULL,
+                q_type TEXT DEFAULT 'text',
+                options TEXT DEFAULT '',
+                image_path TEXT DEFAULT '',
                 is_blitz INTEGER DEFAULT 0,
                 is_answered INTEGER DEFAULT 0,
                 FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE CASCADE,
@@ -38,7 +40,16 @@ def init_db():
             )
         """)
 
-        # Таблица игроков
+        # Автоматическая миграция новых колонок для старых БД
+        cursor.execute("PRAGMA table_info(questions)")
+        cols = [col[1] for col in cursor.fetchall()]
+        if "q_type" not in cols:
+            cursor.execute("ALTER TABLE questions ADD COLUMN q_type TEXT DEFAULT 'text'")
+        if "options" not in cols:
+            cursor.execute("ALTER TABLE questions ADD COLUMN options TEXT DEFAULT ''")
+        if "image_path" not in cols:
+            cursor.execute("ALTER TABLE questions ADD COLUMN image_path TEXT DEFAULT ''")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS players (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,7 +58,6 @@ def init_db():
             )
         """)
 
-        # Таблица вопросов для Блиц-финала
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS blitz_final_questions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,13 +69,6 @@ def init_db():
             )
         """)
 
-        # МИГРАЦИЯ: проверка и добавление колонки player_name, если БД уже существовала
-        cursor.execute("PRAGMA table_info(blitz_final_questions)")
-        columns = [column[1] for column in cursor.fetchall()]
-        if "player_name" not in columns:
-            cursor.execute("ALTER TABLE blitz_final_questions ADD COLUMN player_name TEXT NOT NULL DEFAULT ''")
-
-        # Таблица настроек
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
@@ -79,7 +82,6 @@ def init_db():
 
 
 def _seed_initial_data():
-    """Первоначальное заполнение дефолтными данными."""
     with get_connection() as conn:
         cursor = conn.cursor()
 
@@ -87,18 +89,11 @@ def _seed_initial_data():
         if cursor.fetchone()[0] == 0:
             default_quiz = {
                 "Наука": {
-                    100: {"q": "Какая планета прозвана «Красной планетой»?", "a": "Марс", "is_blitz": False},
-                    200: {"q": "Сколько хромосом у человека в норме?", "a": "46 (23 пары)", "is_blitz": False},
-                    300: {"q": "БЛИЦ: Назовите элемент с атомным номером 1 за 15 секунд!", "a": "Водород", "is_blitz": True},
-                    400: {"q": "Чему равна скорость света в вакууме?", "a": "300 000 км/с", "is_blitz": False},
-                    500: {"q": "Как называется процесс деления клеток?", "a": "Митоз", "is_blitz": False}
-                },
-                "История": {
-                    100: {"q": "В каком году произошла Октябрьская революция?", "a": "1917", "is_blitz": False},
-                    200: {"q": "Кто был первым императором Всероссийским?", "a": "Пётр I", "is_blitz": False},
-                    300: {"q": "В каком веке было Крещение Руси?", "a": "X век (988 год)", "is_blitz": False},
-                    400: {"q": "Как назывался план нападения Германии на СССР?", "a": "Барбаросса", "is_blitz": False},
-                    500: {"q": "БЛИЦ: В каком году пала Западная Римская империя?", "a": "476 год", "is_blitz": True}
+                    100: {"q": "Какая планета прозвана «Красной планетой»?", "a": "Марс", "type": "text", "opts": "", "img": "", "is_blitz": False},
+                    200: {"q": "Сколько хромосом у человека в норме?", "a": "46", "type": "choice", "opts": json.dumps(["42", "44", "46", "48"]), "img": "", "is_blitz": False},
+                    300: {"q": "БЛИЦ: Назовите элемент с атомным номером 1 за 15 секунд!", "a": "Водород", "type": "text", "opts": "", "img": "", "is_blitz": True},
+                    400: {"q": "Чему равна скорость света в вакууме?", "a": "300 000 км/с", "type": "text", "opts": "", "img": "", "is_blitz": False},
+                    500: {"q": "Как называется процесс деления клеток?", "a": "Митоз", "type": "text", "opts": "", "img": "", "is_blitz": False}
                 }
             }
 
@@ -107,29 +102,14 @@ def _seed_initial_data():
                 cat_id = cursor.lastrowid
                 for points, data in questions.items():
                     cursor.execute("""
-                        INSERT INTO questions (category_id, points, question, answer, is_blitz, is_answered)
-                        VALUES (?, ?, ?, ?, ?, 0)
-                    """, (cat_id, points, data["q"], data["a"], 1 if data["is_blitz"] else 0))
+                        INSERT INTO questions (category_id, points, question, answer, q_type, options, image_path, is_blitz, is_answered)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+                    """, (cat_id, points, data["q"], data["a"], data["type"], data["opts"], data["img"], 1 if data["is_blitz"] else 0))
 
         cursor.execute("SELECT COUNT(*) FROM players")
         if cursor.fetchone()[0] == 0:
             cursor.execute("INSERT INTO players (name, score) VALUES ('Игрок 1', 0)")
             cursor.execute("INSERT INTO players (name, score) VALUES ('Игрок 2', 0)")
-
-        # Заполнение Блиц-вопросов для дефолтных игроков
-        cursor.execute("SELECT COUNT(*) FROM blitz_final_questions")
-        if cursor.fetchone()[0] == 0:
-            default_blitz_p1 = [
-                ("Игрок 1", 100, "Самое глубокое озеро в мире?", "Байкал"),
-                ("Игрок 1", 100, "Столица Франции?", "Париж"),
-                ("Игрок 1", 100, "Сколько градусов в прямом угле?", "90")
-            ]
-            default_blitz_p2 = [
-                ("Игрок 2", 100, "Какая столица у Японии?", "Токио"),
-                ("Игрок 2", 100, "Автор романа «Война и мир»?", "Лев Толстой"),
-                ("Игрок 2", 100, "Сколько планет в Солнечной системе?", "8")
-            ]
-            cursor.executemany("INSERT INTO blitz_final_questions (player_name, points, question, answer) VALUES (?, ?, ?, ?)", default_blitz_p1 + default_blitz_p2)
 
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('timer_default', '30')")
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('timer_blitz', '15')")
@@ -137,10 +117,6 @@ def _seed_initial_data():
 
         conn.commit()
 
-
-# ==========================================
-# ВОПРОСЫ И КАТЕГОРИИ
-# ==========================================
 
 def load_quiz_data():
     quiz_data = {}
@@ -154,19 +130,45 @@ def load_quiz_data():
             quiz_data[cat_name] = {}
 
             cursor.execute("""
-                SELECT points, question, answer, is_blitz, is_answered 
+                SELECT points, question, answer, q_type, options, image_path, is_blitz, is_answered 
                 FROM questions 
                 WHERE category_id = ?
             """, (cat_id,))
 
             for row in cursor.fetchall():
+                opts_list = json.loads(row["options"]) if row["options"] else ["", "", "", ""]
                 quiz_data[cat_name][row["points"]] = {
                     "q": row["question"],
                     "a": row["answer"],
+                    "q_type": row["q_type"] or "text",
+                    "options": opts_list,
+                    "image_path": row["image_path"] or "",
                     "is_blitz": bool(row["is_blitz"]),
                     "is_answered": row["is_answered"]
                 }
     return quiz_data
+
+
+def save_question(cat_name, points, question, answer, q_type="text", options=None, image_path="", is_blitz=False):
+    opts_str = json.dumps(options) if options else ""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM categories WHERE name = ?", (cat_name,))
+        cat_row = cursor.fetchone()
+        if cat_row:
+            cat_id = cat_row["id"]
+            cursor.execute("""
+                INSERT INTO questions (category_id, points, question, answer, q_type, options, image_path, is_blitz)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(category_id, points) DO UPDATE SET
+                    question = excluded.question,
+                    answer = excluded.answer,
+                    q_type = excluded.q_type,
+                    options = excluded.options,
+                    image_path = excluded.image_path,
+                    is_blitz = excluded.is_blitz
+            """, (cat_id, points, question, answer, q_type, opts_str, image_path, 1 if is_blitz else 0))
+            conn.commit()
 
 
 def mark_question_as_answered(cat_name, points):
@@ -205,28 +207,6 @@ def delete_category(name):
         conn.commit()
 
 
-def save_question(cat_name, points, question, answer, is_blitz):
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM categories WHERE name = ?", (cat_name,))
-        cat_row = cursor.fetchone()
-        if cat_row:
-            cat_id = cat_row["id"]
-            cursor.execute("""
-                INSERT INTO questions (category_id, points, question, answer, is_blitz)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(category_id, points) DO UPDATE SET
-                    question = excluded.question,
-                    answer = excluded.answer,
-                    is_blitz = excluded.is_blitz
-            """, (cat_id, points, question, answer, 1 if is_blitz else 0))
-            conn.commit()
-
-
-# ==========================================
-# БЛИЦ-ФИНАЛ (ПО ИГРОКАМ)
-# ==========================================
-
 def load_blitz_final_questions_for_player(player_name):
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -254,10 +234,6 @@ def delete_blitz_final_question(q_id):
         cursor.execute("DELETE FROM blitz_final_questions WHERE id = ?", (q_id,))
         conn.commit()
 
-
-# ==========================================
-# ИГРОКИ
-# ==========================================
 
 def load_players():
     with get_connection() as conn:
@@ -299,10 +275,6 @@ def reset_all_scores():
         cursor.execute("UPDATE players SET score = 0")
         conn.commit()
 
-
-# ==========================================
-# НАСТРОЙКИ
-# ==========================================
 
 def get_setting(key, default_value):
     with get_connection() as conn:
